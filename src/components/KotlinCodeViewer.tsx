@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { CodeSnippet } from '../types';
 import { kotlinCodeTemplates } from '../kotlinCodeTemplates';
+import { generateAndroidProjectZip } from '../lib/androidProjectGenerator';
 
 interface KotlinCodeViewerProps {
   onCopySuccess: () => void;
@@ -8,6 +9,7 @@ interface KotlinCodeViewerProps {
 
 export const KotlinCodeViewer: React.FC<KotlinCodeViewerProps> = ({ onCopySuccess }) => {
   const [selectedFileIndex, setSelectedFileIndex] = useState<number>(0);
+  const [isZipping, setIsZipping] = useState<boolean>(false);
   const activeSnippet = kotlinCodeTemplates[selectedFileIndex];
 
   const handleCopyCode = async () => {
@@ -16,6 +18,25 @@ export const KotlinCodeViewer: React.FC<KotlinCodeViewerProps> = ({ onCopySucces
       onCopySuccess();
     } catch (err) {
       console.error("Failed to copy", err);
+    }
+  };
+
+  const handleDownloadProject = async () => {
+    setIsZipping(true);
+    try {
+      const blob = await generateAndroidProjectZip();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'StudentExpenseTracker_AndroidProject.zip';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error("Failed to create ZIP", err);
+    } finally {
+      setIsZipping(false);
     }
   };
 
@@ -47,19 +68,30 @@ export const KotlinCodeViewer: React.FC<KotlinCodeViewerProps> = ({ onCopySucces
     <div id="kotlin-code-viewer" className="bg-zinc-950 border border-zinc-900 rounded-3xl p-5 flex flex-col gap-5 h-full min-h-[600px] shadow-[0_8px_32px_rgba(0,0,0,0.4)] md:max-h-[720px] overflow-hidden">
       
       {/* SECTION HEADER */}
-      <div className="flex items-center justify-between border-b border-zinc-900 pb-3 shrink-0">
+      <div className="flex items-center justify-between border-b border-zinc-900 pb-3 shrink-0 flex-wrap gap-2">
         <div>
           <h2 className="text-sm font-bold text-zinc-200">Android Studio Explorer 👨‍💻</h2>
           <p className="text-[11px] text-zinc-500 mt-0.5">Learn how Jetpack Compose handles this Student Expense Tracker</p>
         </div>
         
-        {/* Quick Copy Action */}
-        <button 
-          onClick={handleCopyCode}
-          className="px-3.5 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 hover:bg-emerald-500/20 text-emerald-400 font-bold text-xs transition-all flex items-center gap-1.5 cursor-pointer"
-        >
-          <span>Copy File Code 📋</span>
-        </button>
+        <div className="flex items-center gap-2">
+          {/* Real ZIP Installer Button */}
+          <button 
+            onClick={handleDownloadProject}
+            disabled={isZipping}
+            className="px-3.5 py-1.5 rounded-full bg-emerald-500 hover:bg-emerald-600 text-zinc-950 font-black text-xs transition-all flex items-center gap-1.5 cursor-pointer shadow-lg active:scale-95 disabled:opacity-50"
+          >
+            <span>{isZipping ? '⚡ Generating ZIP...' : 'Download Project ZIP 📦'}</span>
+          </button>
+
+          {/* Quick Copy Action */}
+          <button 
+            onClick={handleCopyCode}
+            className="px-3.5 py-1.5 rounded-full bg-zinc-900 border border-zinc-800 hover:bg-zinc-855 text-zinc-300 font-bold text-xs transition-all flex items-center gap-1.5 cursor-pointer active:scale-95"
+          >
+            <span>Copy File Code 📋</span>
+          </button>
+        </div>
       </div>
 
       <div className="flex-1 flex flex-col md:flex-row gap-4 overflow-hidden">
@@ -92,10 +124,18 @@ export const KotlinCodeViewer: React.FC<KotlinCodeViewerProps> = ({ onCopySucces
           </div>
 
           <div className="bg-zinc-900/35 p-3 rounded-2xl border border-zinc-900 flex flex-col mt-auto gap-2">
-            <span className="text-[10px] text-zinc-400 font-bold">💡 HINGLISH GUIDE:</span>
-            <p className="text-[10px] text-zinc-500 leading-normal">
-              Yeh files fully-functional Android Kotlin projects ke liye ready hain. Android Studio me copy paste karke compile karein!
-            </p>
+            <span className="text-[10px] text-zinc-450 font-bold uppercase tracking-wider">🛠️ APK KAISE BANAYEIN?</span>
+            <div className="text-[9.5px] text-zinc-500 space-y-1.5 leading-normal">
+              <p>
+                <strong className="text-zinc-350">1. Project Import:</strong> "Download Project ZIP" button daba ke file save karein aur extract karein. Android Studio me <strong className="text-zinc-350">File &gt; Open</strong> par click karke extracted folder ko select karein.
+              </p>
+              <p>
+                <strong className="text-zinc-350">2. Gradle Sync:</strong> Wait karein jab tak build finishes sync successfully ho jaye.
+              </p>
+              <p>
+                <strong className="text-zinc-350">3. Create APK:</strong> Android Studio ke top menu me <strong className="text-emerald-400">Build &gt; Build Bundle(s) / APK(s) &gt; Build APK(s)</strong> par click karein! Kucch hi seconds me aapka standalone Mobile APK file taiyaar ho jayega jise aap direct phone me install kar sakte hain!
+              </p>
+            </div>
           </div>
         </div>
 
@@ -113,7 +153,7 @@ export const KotlinCodeViewer: React.FC<KotlinCodeViewerProps> = ({ onCopySucces
 
           {/* High resolution code editor with line numbers */}
           <div className="flex-1 bg-zinc-950/80 border border-zinc-900 rounded-2xl relative overflow-auto font-mono text-[11px] leading-relaxed select-text p-4 text-zinc-300">
-            <pre className="overflow-x-auto whitespace-pre">
+            <pre className="overflow-x-auto whitespace-pre font-mono">
               <code>
                 {activeSnippet.code}
               </code>

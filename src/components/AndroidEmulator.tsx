@@ -15,6 +15,7 @@ interface AndroidEmulatorProps {
   setAutoSyncEnabled: (val: boolean) => void;
   onSyncExpense: (id: string) => Promise<boolean>;
   googleToken: string | null;
+  isStandaloneCleanView?: boolean;
 }
 
 export const AndroidEmulator: React.FC<AndroidEmulatorProps> = ({
@@ -30,6 +31,7 @@ export const AndroidEmulator: React.FC<AndroidEmulatorProps> = ({
   setAutoSyncEnabled,
   onSyncExpense,
   googleToken,
+  isStandaloneCleanView = false,
 }) => {
   // Simulator operational state
   const [phoneTime, setPhoneTime] = useState<string>('12:00');
@@ -138,35 +140,39 @@ export const AndroidEmulator: React.FC<AndroidEmulatorProps> = ({
   };
 
   return (
-    <div id="android-emulator-container" className="flex flex-col items-center justify-center p-4">
+    <div id="android-emulator-container" className={isStandaloneCleanView ? "w-full max-w-lg mx-auto flex flex-col p-2" : "flex flex-col items-center justify-center p-4"}>
       {/* Phone Case Frame */}
-      <div className="relative w-full max-w-[375px] h-[760px] bg-zinc-900 rounded-[48px] border-4 border-zinc-800 shadow-[0_40px_100px_rgba(0,0,0,0.6)] flex flex-col overflow-hidden select-none">
+      <div className={isStandaloneCleanView ? "relative w-full bg-neutral-905 rounded-[28px] border border-zinc-850/90 shadow-[0_24px_80px_rgba(0,0,0,0.5)] flex flex-col overflow-hidden select-none min-h-[690px]" : "relative w-full max-w-[375px] h-[760px] bg-zinc-900 rounded-[48px] border-4 border-zinc-800 shadow-[0_40px_100px_rgba(0,0,0,0.6)] flex flex-col overflow-hidden select-none"}>
         
         {/* Dynamic Island / Speaker */}
-        <div className="absolute top-2 left-1/2 transform -translate-x-1/2 w-32 h-6 bg-black rounded-full z-50 flex items-center justify-center">
-          <div className="w-16 h-1 bg-zinc-800 rounded-full" />
-          <div className="w-2.5 h-2.5 bg-zinc-900 rounded-full ml-4 border border-zinc-700" />
-        </div>
+        {!isStandaloneCleanView && (
+          <div className="absolute top-2 left-1/2 transform -translate-x-1/2 w-32 h-6 bg-black rounded-full z-50 flex items-center justify-center animate-pulse">
+            <div className="w-16 h-1 bg-zinc-800 rounded-full" />
+            <div className="w-2.5 h-2.5 bg-zinc-900 rounded-full ml-4 border border-zinc-700" />
+          </div>
+        )}
 
         {/* Dynamic Android Toast Alert */}
         {toastMessage && (
-          <div className="absolute top-20 left-4 right-4 bg-zinc-850/95 backdrop-blur-md text-zinc-100 px-4 py-3 rounded-2xl text-xs font-sans text-center z-50 shadow-lg border border-zinc-700/50 animate-bounce duration-500">
+          <div className={`absolute left-4 right-4 bg-zinc-850/95 backdrop-blur-md text-zinc-100 px-4 py-3 rounded-2xl text-xs font-sans text-center z-50 shadow-lg border border-zinc-700/50 ${isStandaloneCleanView ? 'top-16' : 'top-20 animate-bounce duration-500'}`}>
             {toastMessage}
           </div>
         )}
 
         {/* STATUS BAR */}
-        <div className="pt-9 px-6 pb-2 bg-zinc-950 flex items-center justify-between text-[11px] font-medium text-zinc-300 z-40 shrink-0">
-          <div>{phoneTime}</div>
-          <div className="flex items-center gap-2">
-            <span>📡 5G</span>
-            <span>📶 VoLTE</span>
-            <span>🔋 {batteryLevel}%</span>
+        {!isStandaloneCleanView && (
+          <div className="pt-9 px-6 pb-2 bg-zinc-950 flex items-center justify-between text-[11px] font-medium text-zinc-300 z-40 shrink-0">
+            <div>{phoneTime}</div>
+            <div className="flex items-center gap-2">
+              <span>📡 5G</span>
+              <span>📶 VoLTE</span>
+              <span>🔋 {batteryLevel}%</span>
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Android Display Window Screen */}
-        <div className="flex-1 bg-neutral-900 text-zinc-100 overflow-y-auto overflow-x-hidden flex flex-col font-sans scrollbar-none relative pb-10">
+        <div className={`flex-1 bg-neutral-900 text-zinc-100 overflow-y-auto overflow-x-hidden flex flex-col font-sans scrollbar-none relative ${isStandaloneCleanView ? 'pb-16' : 'pb-10'}`}>
           
           {/* APP HEADER */}
           <div className="px-4 py-3 bg-emerald-900/40 border-b border-emerald-900/20 backdrop-blur-md sticky top-0 z-30 flex items-center justify-between">
@@ -538,7 +544,9 @@ export const AndroidEmulator: React.FC<AndroidEmulatorProps> = ({
           )}
 
           {/* BOTTOM SIMULATED HOME BAR KEY */}
-          <div className="absolute bottom-1.5 left-1/2 transform -translate-x-1/2 w-28 h-1 bg-zinc-700 rounded-full" />
+          {!isStandaloneCleanView && (
+            <div className="absolute bottom-1.5 left-1/2 transform -translate-x-1/2 w-28 h-1 bg-zinc-700 rounded-full" />
+          )}
         </div>
       </div>
     </div>
