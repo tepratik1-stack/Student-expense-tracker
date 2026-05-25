@@ -1,0 +1,6 @@
+{
+  "name": "Student Expense Tracker",
+  "description": "An interactive Jetpack Compose Android emulator and student daily expense tracker with local storage support and copyable structural Kotlin code.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
