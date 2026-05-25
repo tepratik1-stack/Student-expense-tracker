@@ -4,6 +4,8 @@ export interface Expense {
   description: string;
   category: 'Food' | 'Travel' | 'Study' | 'Recharge' | 'Other';
   timestamp: number; // For sorting and today comparison
+  googleEventId?: string; // Optional ID if synced with Google Calendar
+  syncedAt?: number; // Timestamp when synced
 }
 
 export type ExpenseCategory = 'Food' | 'Travel' | 'Study' | 'Recharge' | 'Other';

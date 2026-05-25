@@ -1,12 +1,20 @@
 import React, { useState, useEffect } from 'react';
 import { Expense, ExpenseCategory } from '../types';
+import { User } from 'firebase/auth';
 
 interface AndroidEmulatorProps {
   expenses: Expense[];
   onAddExpense: (amount: number, description: string, category: ExpenseCategory) => void;
-  onDeleteExpense: (id: string) => void;
+  onDeleteExpense: (id: string, deleteCalendar: boolean) => void;
   dailyLimit: number;
   setDailyLimit: (limit: number) => void;
+  user: User | null;
+  onLogin: () => Promise<any>;
+  onLogout: () => void;
+  autoSyncEnabled: boolean;
+  setAutoSyncEnabled: (val: boolean) => void;
+  onSyncExpense: (id: string) => Promise<boolean>;
+  googleToken: string | null;
 }
 
 export const AndroidEmulator: React.FC<AndroidEmulatorProps> = ({
@@ -15,6 +23,13 @@ export const AndroidEmulator: React.FC<AndroidEmulatorProps> = ({
   onDeleteExpense,
   dailyLimit,
   setDailyLimit,
+  user,
+  onLogin,
+  onLogout,
+  autoSyncEnabled,
+  setAutoSyncEnabled,
+  onSyncExpense,
+  googleToken,
 }) => {
   // Simulator operational state
   const [phoneTime, setPhoneTime] = useState<string>('12:00');
@@ -28,6 +43,10 @@ export const AndroidEmulator: React.FC<AndroidEmulatorProps> = ({
   
   // Custom notifications / Android toasts
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  
+  // Custom states for Google Calendar deletion and individual sync loading
+  const [expenseToDelete, setExpenseToDelete] = useState<Expense | null>(null);
+  const [isSyncingId, setIsSyncingId] = useState<string | null>(null);
 
   useEffect(() => {
     // Keep device clock synchronized with current time
@@ -64,6 +83,31 @@ export const AndroidEmulator: React.FC<AndroidEmulatorProps> = ({
     setAmountInput('');
     setDescInput('');
     triggerToast('Kharcha save ho gaya! 💾✅');
+  };
+
+  const handleDeletePrompt = (item: Expense) => {
+    if (item.googleEventId) {
+      setExpenseToDelete(item);
+    } else {
+      onDeleteExpense(item.id, false);
+      triggerToast('Kharcha delete ho gaya! ❌');
+    }
+  };
+
+  const handleSyncSingle = async (item: Expense) => {
+    setIsSyncingId(item.id);
+    try {
+      const success = await onSyncExpense(item.id);
+      if (success) {
+        triggerToast('Calendar me sync ho gaya! 📅✨');
+      } else {
+        triggerToast('Pahle Google se link karein! 👤');
+      }
+    } catch (e: any) {
+      triggerToast(e.message || 'Sync failed! Try again.');
+    } finally {
+      setIsSyncingId(null);
+    }
   };
 
   // Filter today's expenses
@@ -174,6 +218,90 @@ export const AndroidEmulator: React.FC<AndroidEmulatorProps> = ({
               </p>
             </div>
 
+            {/* GOOGLE CALENDAR SYNC PANEL */}
+            {!user ? (
+              <div className="p-4 bg-zinc-950/40 rounded-3xl border border-zinc-850/60 flex flex-col gap-2.5">
+                <div className="flex items-start gap-2.5">
+                  <span className="text-xl">📅</span>
+                  <div>
+                    <h4 className="text-xs font-bold text-zinc-200">Google Calendar Sync 🌐</h4>
+                    <p className="text-[10px] text-zinc-500 mt-0.5 leading-snug">
+                      Bachat and spendings details ko direct Google Calendar per automatic sync karein!
+                    </p>
+                  </div>
+                </div>
+
+                <button 
+                  type="button" 
+                  onClick={onLogin}
+                  className="w-full h-10 pointer-events-auto bg-zinc-900 hover:bg-zinc-850 active:scale-98 border border-zinc-800 rounded-full flex items-center justify-center gap-2 px-4 transition-all cursor-pointer"
+                >
+                  <div className="w-4 h-4 shrink-0">
+                    <svg version="1.1" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" className="w-full h-full block">
+                      <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"></path>
+                      <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"></path>
+                      <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"></path>
+                      <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"></path>
+                      <path fill="none" d="M0 0h48v48H0z"></path>
+                    </svg>
+                  </div>
+                  <span className="text-[11px] font-black text-zinc-200">Connect Google Calendar</span>
+                </button>
+              </div>
+            ) : (
+              <div className="p-4 bg-emerald-950/25 rounded-3xl border border-emerald-900/30 flex flex-col gap-3 animate-fade-in">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 max-w-[70%]">
+                    {user.photoURL ? (
+                      <img 
+                        src={user.photoURL} 
+                        alt="Profile" 
+                        className="w-7 h-7 rounded-full border border-emerald-500/20 shadow-inner" 
+                        referrerPolicy="no-referrer"
+                      />
+                    ) : (
+                      <div className="w-7 h-7 bg-emerald-800 text-emerald-100 rounded-full flex items-center justify-center text-xs font-bold font-mono">
+                        {(user.displayName || user.email || 'S').charAt(0).toUpperCase()}
+                      </div>
+                    )}
+                    <div className="flex flex-col min-w-0">
+                      <span className="text-[11px] font-bold text-zinc-100 truncate">{user.displayName || user.email}</span>
+                      <span className="text-[9px] text-emerald-400 font-medium">Calendar Connections Live ✅</span>
+                    </div>
+                  </div>
+
+                  <button 
+                    type="button"
+                    onClick={onLogout}
+                    className="px-2.5 py-1 rounded-lg bg-zinc-900 hover:bg-red-950/30 border border-zinc-800 hover:border-red-900/40 text-[9.5px] font-bold text-zinc-400 hover:text-red-400 active:scale-95 transition-all text-center"
+                  >
+                    Disconnect
+                  </button>
+                </div>
+
+                <div className="flex items-center justify-between border-t border-zinc-850 pt-2.5">
+                  <div className="flex flex-col">
+                    <span className="text-[10px] font-bold text-zinc-300">Save hone par automatic sync</span>
+                    <span className="text-[9px] text-zinc-500">Expenses direct calendar me save honge</span>
+                  </div>
+                  
+                  <button
+                    type="button"
+                    onClick={() => setAutoSyncEnabled(!autoSyncEnabled)}
+                    className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                      autoSyncEnabled ? 'bg-emerald-500' : 'bg-zinc-800'
+                    }`}
+                  >
+                    <span
+                      className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-zinc-950 shadow ring-0 transition duration-200 ease-in-out ${
+                        autoSyncEnabled ? 'translate-x-4' : 'translate-x-0'
+                      }`}
+                    />
+                  </button>
+                </div>
+              </div>
+            )}
+
             {/* EXPENSE ENTRY FORM */}
             <form onSubmit={handleSaveExpense} className="p-4 bg-zinc-950/80 rounded-3xl border border-zinc-800 flex flex-col gap-3">
               <h3 className="text-xs font-semibold text-emerald-400 tracking-wider uppercase">Naya Kharcha Daalo 📝</h3>
@@ -267,27 +395,40 @@ export const AndroidEmulator: React.FC<AndroidEmulatorProps> = ({
                         key={item.id}
                         className="p-3 bg-zinc-950 rounded-2xl border border-zinc-850 flex items-center justify-between hover:border-zinc-700 transition-all hover:translate-x-0.5 duration-200"
                       >
-                        <div className="flex items-center gap-2.5">
-                          <div className={`w-9 h-9 rounded-full flex items-center justify-center text-base ${details.bgColor}`}>
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <div className={`w-9 h-9 rounded-full flex items-center justify-center text-base shrink-0 ${details.bgColor}`}>
                             {details.icon}
                           </div>
-                          <div>
-                            <h4 className="text-xs font-bold text-zinc-200 leading-snug">{item.description}</h4>
-                            <span className="text-[9px] text-zinc-500">
-                              {item.category} • {expTime}
-                            </span>
+                          <div className="min-w-0">
+                            <h4 className="text-xs font-bold text-zinc-200 leading-snug truncate">{item.description}</h4>
+                            <div className="flex flex-wrap items-center gap-1.5 mt-0.5">
+                              <span className="text-[9px] text-zinc-500 shrink-0">
+                                {item.category} • {expTime}
+                              </span>
+                              {item.googleEventId ? (
+                                <span className="text-[8.5px] bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 px-1 py-0.2 rounded font-mono font-bold flex items-center gap-0.5 shrink-0">
+                                  📅 Synced
+                                </span>
+                              ) : user ? (
+                                <button
+                                  type="button"
+                                  disabled={isSyncingId === item.id}
+                                  onClick={() => handleSyncSingle(item)}
+                                  className="text-[8.5px] bg-zinc-900 hover:bg-emerald-500/10 hover:text-emerald-400 border border-zinc-800 text-zinc-500 hover:border-emerald-500/25 px-1 py-0.2 rounded font-bold transition-all flex items-center gap-0.5 whitespace-nowrap active:scale-95 cursor-pointer shrink-0"
+                                >
+                                  {isSyncingId === item.id ? '⚡ Syncing...' : '📅 Sync Now'}
+                                </button>
+                              ) : null}
+                            </div>
                           </div>
                         </div>
 
-                        <div className="flex items-center gap-2.5">
+                        <div className="flex items-center gap-2 shrink-0">
                           <span className="text-xs font-mono font-bold text-emerald-400">₹{item.amount}</span>
                           <button
                             type="button"
-                            onClick={() => {
-                              onDeleteExpense(item.id);
-                              triggerToast('Kharcha delete ho gaya! ❌');
-                            }}
-                            className="p-1 text-zinc-500 hover:text-red-400 active:scale-95 text-xs rounded-full"
+                            onClick={() => handleDeletePrompt(item)}
+                            className="p-1 text-zinc-500 hover:text-red-400 active:scale-95 text-xs rounded-full cursor-pointer"
                           >
                             ❌
                           </button>
@@ -343,6 +484,53 @@ export const AndroidEmulator: React.FC<AndroidEmulatorProps> = ({
                     className="py-2.5 rounded-xl bg-emerald-500 text-[11px] font-bold text-zinc-950 hover:bg-emerald-600 active:scale-95 transition-all text-center"
                   >
                     Save Limit
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* DYNAMIC CALENDAR DELETE CONFIRMATION MODAL */}
+          {expenseToDelete && (
+            <div className="absolute inset-0 bg-black/85 flex items-center justify-center p-4 z-50 backdrop-blur-sm animate-fade-in">
+              <div className="w-full max-w-[290px] bg-zinc-950 border border-red-900/35 p-5 rounded-[28px] flex flex-col gap-4">
+                <div className="text-center">
+                  <span className="text-3xl">📅🗑️</span>
+                  <h4 className="font-bold text-zinc-200 text-sm mt-1.5 leading-tight">Calendar se bhi delete karein?</h4>
+                  <p className="text-[10px] text-zinc-400 mt-1 leading-normal px-2">
+                    Aapka yeh expense Google Calendar me already sync ho chuka hai. Kya aap use bhi calendar se delete karna chahte hain?
+                  </p>
+                </div>
+
+                <div className="flex flex-col gap-2 mt-1">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onDeleteExpense(expenseToDelete.id, true);
+                      setExpenseToDelete(null);
+                      triggerToast('All done! Calendar aur app dono se saaf! 🗑️✅');
+                    }}
+                    className="w-full py-2.5 rounded-xl bg-red-500 hover:bg-red-600 active:scale-95 transition-all text-[11px] font-bold text-zinc-950 text-center cursor-pointer"
+                  >
+                    Yes, Delete From Both 🗑️
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onDeleteExpense(expenseToDelete.id, false);
+                      setExpenseToDelete(null);
+                      triggerToast('App se nikaala, Calendar me chhod diya! 👍');
+                    }}
+                    className="w-full py-2.5 rounded-xl bg-zinc-900 border border-zinc-800 hover:bg-zinc-850 active:scale-95 transition-all text-[11px] font-bold text-zinc-300 text-center cursor-pointer"
+                  >
+                    No, Only App se delete karein
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setExpenseToDelete(null)}
+                    className="w-full py-2 bg-transparent text-[10.5px] font-bold text-zinc-500 hover:text-zinc-400 text-center cursor-pointer"
+                  >
+                    Cancel
                   </button>
                 </div>
               </div>

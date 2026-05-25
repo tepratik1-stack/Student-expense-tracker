@@ -3,6 +3,9 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Expense, ExpenseCategory } from './types';
 import { AndroidEmulator } from './components/AndroidEmulator';
 import { KotlinCodeViewer } from './components/KotlinCodeViewer';
+import { User } from 'firebase/auth';
+import { initAuth, googleSignIn, logout } from './lib/firebaseAuth';
+import { createCalendarEvent, deleteCalendarEvent } from './lib/calendarService';
 
 export default function App() {
   // Persistence with LocalStorage
@@ -53,6 +56,14 @@ export default function App() {
     return saved ? parseFloat(saved) : 500; // Default 500 Rupees
   });
 
+  // Google Calendar Integration states
+  const [user, setUser] = useState<User | null>(null);
+  const [googleToken, setGoogleToken] = useState<string | null>(null);
+  const [autoSyncEnabled, setAutoSyncEnabled] = useState<boolean>(() => {
+    const saved = localStorage.getItem('GOOGLE_CALENDAR_AUTO_SYNC');
+    return saved ? saved === 'true' : true;
+  });
+
   // Client layout helpers
   const [activeTab, setActiveTab] = useState<'APP' | 'CODE'>('APP');
   const [showCopyAlert, setShowCopyAlert] = useState<boolean>(false);
@@ -66,19 +77,117 @@ export default function App() {
     localStorage.setItem('STUDENT_DAILY_LIMIT', String(dailyLimit));
   }, [dailyLimit]);
 
-  const handleAddExpense = (amount: number, description: string, category: ExpenseCategory) => {
+  useEffect(() => {
+    localStorage.setItem('GOOGLE_CALENDAR_AUTO_SYNC', String(autoSyncEnabled));
+  }, [autoSyncEnabled]);
+
+  // Handle Firebase Authentication state listener integration
+  useEffect(() => {
+    const unsubscribe = initAuth(
+      (authUser, token) => {
+        setUser(authUser);
+        setGoogleToken(token);
+      },
+      () => {
+        setUser(null);
+        setGoogleToken(null);
+      }
+    );
+    return () => unsubscribe();
+  }, []);
+
+  const handleLogin = async (): Promise<string | null> => {
+    try {
+      const result = await googleSignIn();
+      if (result) {
+        setUser(result.user);
+        setGoogleToken(result.accessToken);
+        return result.accessToken;
+      }
+    } catch (err) {
+      console.error("Google authentication failed", err);
+    }
+    return null;
+  };
+
+  const handleLogout = async () => {
+    try {
+      await logout();
+      setUser(null);
+      setGoogleToken(null);
+    } catch (err) {
+      console.error("Google disconnect logout failed", err);
+    }
+  };
+
+  const handleSyncExpense = async (id: string): Promise<boolean> => {
+    let currentToken = googleToken;
+    if (!currentToken) {
+      currentToken = await handleLogin();
+      if (!currentToken) return false;
+    }
+
+    const expenseItem = expenses.find((exp) => exp.id === id);
+    if (!expenseItem || expenseItem.googleEventId) {
+      return false;
+    }
+
+    try {
+      const eventId = await createCalendarEvent(currentToken, expenseItem);
+      setExpenses((prev) => prev.map((item) => 
+        item.id === id 
+          ? { ...item, googleEventId: eventId, syncedAt: Date.now() } 
+          : item
+      ));
+      return true;
+    } catch (err) {
+      console.error("Failed to sync expense item:", err);
+      throw err;
+    }
+  };
+
+  const handleAddExpense = async (amount: number, description: string, category: ExpenseCategory) => {
+    const localId = `exp-${Date.now()}`;
     const newExpense: Expense = {
-      id: `exp-${Date.now()}`,
+      id: localId,
       amount,
       description,
       category,
       timestamp: Date.now(),
     };
+    
+    // Write entry to state instantaneously so UI operates fast
     setExpenses((prev) => [newExpense, ...prev]);
+
+    // Send to Google Calendar automatically if configured and synchronized
+    if (googleToken && autoSyncEnabled) {
+      try {
+        const eventId = await createCalendarEvent(googleToken, newExpense);
+        setExpenses((prev) => prev.map((item) => 
+          item.id === localId 
+            ? { ...item, googleEventId: eventId, syncedAt: Date.now() } 
+            : item
+        ));
+      } catch (err) {
+        console.error("Auto calendar synchronization failed", err);
+      }
+    }
   };
 
-  const handleDeleteExpense = (id: string) => {
+  const handleDeleteExpense = async (id: string, deleteCalendar: boolean) => {
+    const target = expenses.find((item) => item.id === id);
+    
+    // Filter item from list first
     setExpenses((prev) => prev.filter((item) => item.id !== id));
+
+    // Cancel calendar event if required
+    if (deleteCalendar && target?.googleEventId && googleToken) {
+      try {
+        await deleteCalendarEvent(googleToken, target.googleEventId);
+      } catch (err) {
+        console.error("Calendar event removal failed", err);
+      }
+    }
   };
 
   const handleCopyAlert = () => {
@@ -168,6 +277,13 @@ export default function App() {
               onDeleteExpense={handleDeleteExpense}
               dailyLimit={dailyLimit}
               setDailyLimit={setDailyLimit}
+              user={user}
+              onLogin={handleLogin}
+              onLogout={handleLogout}
+              autoSyncEnabled={autoSyncEnabled}
+              setAutoSyncEnabled={setAutoSyncEnabled}
+              onSyncExpense={handleSyncExpense}
+              googleToken={googleToken}
             />
           </div>
 
